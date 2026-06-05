@@ -18,6 +18,6 @@ The models were tasked with creating a modern C++ resource pool (C++17/20) that 
 | :--- | :--- |
 | **CPU** | AMD Ryzen 7 7800X3D (8-Core) |
 | **RAM** | 32 GB |
-| **VRAM** | 16 GB |
+| **GPU** | NVIDIA RTX 5070 Ti (16 GB VRAM) |
 | **Model 1** | `google/gemma-4-12b-qat` (Q4_0 quantization) |
 | **Model 2** | `Jackrong/qwopus3.5-9b-coder` (Q8_0 quantization) |
