@@ -212,7 +212,7 @@
     <p><span class="pass">✅ Gemma: PASS</span><br>
     Uses <code>std::unique_ptr</code> with a custom deleter (<code>std::function</code>). When the pointer goes out of scope, the deleter captures <code>this</code> and safely pushes the resource back into the pool's vector.</p>
     <p><span class="fail">❌ Qwopus: FAIL</span><br>
-    Returns a standard <code>std::shared_ptr</code>. When this pointer is destroyed, the <code>HeavyResource</code> is deleted, not returned. The model added a manual <code>pool.release()</code> method, contradicting the "automatic return" requirement.</p>
+    Returns a <code>std::shared_ptr</code> with no custom deleter. When the caller's copy is destroyed, the reference count drops from 2 to 1 — the resource is not deleted (the pool's <code>resources_</code> vector still holds a reference) but is permanently removed from <code>available_resources_</code>. The model added a manual <code>pool.release()</code> method, contradicting the "automatic return" requirement.</p>
 
     <h3>2. Design Choice Explanation</h3>
     <p><span class="partial">️ Gemma: PARTIAL</span><br>
@@ -245,7 +245,7 @@
     <p>If using <code>std::shared_ptr</code> for this purpose, one must either:<br>
     1. Pass a custom deleter when creating the <code>shared_ptr</code> inside the pool.<br>
     2. Use the <code>shared_ptr</code> aliasing constructor to manage the resource's lifetime separately from the object itself.</p>
-    <p>Qwopus simply returns a copy of the <code>shared_ptr</code> from the queue. Once the reference count of this pointer in <code>main()</code> drops to zero, the default deleter is invoked, calling the <code>HeavyResource</code> destructor. The resource is destroyed, not returned. The model's addition of a manual <code>release()</code> method is a workaround that violates the core RAII requirement of the prompt.</p>
+    <p>Qwopus simply returns a copy of the <code>shared_ptr</code> from the queue with no custom deleter attached. When the caller's copy is destroyed, the reference count drops from 2 to 1 — the resource is <strong>not destroyed</strong> (the pool's <code>resources_</code> vector retains a permanent reference) but is permanently removed from <code>available_resources_</code> and becomes inaccessible until the pool itself is destroyed. The model's addition of a manual <code>release()</code> method is a workaround that violates the core RAII requirement of the prompt.</p>
   </section>
 
   <section id="gemma-code">
