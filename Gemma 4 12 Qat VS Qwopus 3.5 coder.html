@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResourcePool Model Comparison: Gemma vs Qwopus</title>
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      line-height: 1.6; 
+      max-width: 900px; 
+      margin: 0 auto; 
+      padding: 20px; 
+      background-color: #1a1a2e; 
+      color: #eaeaea; 
+    }
+    h1, h2, h3 { color: #eee; }
+    h1 { border-bottom: 2px solid #4a9eff; padding-bottom: 10px; }
+    h2 { border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 30px; }
+    table { border-collapse: collapse; width: 100%; margin: 15px 0; background-color: #16213e; }
+    th, td { border: 1px solid #444; padding: 12px; text-align: left; }
+    th { background-color: #0f3460; color: #4a9eff; }
+    tr:nth-child(even) { background-color: #1a1a2e; }
+    tr:hover { background-color: #0f3460; }
+    pre { 
+      background: #16213e; 
+      padding: 15px; 
+      overflow-x: auto; 
+      border-radius: 5px; 
+      border: 1px solid #444;
+      color: #e0e0e0;
+    }
+    code { 
+      background: #0f3460; 
+      padding: 2px 5px; 
+      border-radius: 3px; 
+      color: #4a9eff;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+    .pass { color: #4ade80; font-weight: bold; }
+    .fail { color: #f87171; font-weight: bold; }
+    .partial { color: #fbbf24; font-weight: bold; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; color: #93c5fd; }
+    nav { 
+      margin: 10px 0 20px; 
+      padding: 15px; 
+      background-color: #16213e; 
+      border-radius: 5px;
+      border: 1px solid #444;
+    }
+    nav a { margin-right: 10px; }
+    section { margin-bottom: 40px; }
+    ul, ol { padding-left: 30px; }
+    li { margin: 8px 0; }
+    strong { color: #fff; }
+
+    /* New styles for Hardware & Models sections */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 15px 0;
+    }
+    @media (max-width: 600px) {
+      .info-grid { grid-template-columns: 1fr; }
+    }
+    .info-card {
+      background-color: #16213e;
+      border: 1px solid #444;
+      border-radius: 5px;
+      padding: 15px;
+    }
+    .info-card h3 {
+      margin-top: 0;
+      color: #4a9eff;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    .info-card p {
+      margin: 5px 0;
+    }
+    .sub-text {
+      font-size: 0.9em;
+      color: #aaa;
+    }
+    .badge {
+      display: inline-block;
+      background-color: #0f3460;
+      color: #4a9eff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      margin-right: 5px;
+      border: 1px solid #4a9eff;
+    }
+  </style>
+</head>
+<body>
+  <h1>ResourcePool Model Comparison</h1>
+  <h2>Gemma 4 12b Qat vs. Qwopus 3.5 9b Coder | Task Analysis & Code Review</h2>
+  
+  <nav>
+    <a href="#task">The Task</a> |
+    <a href="#verdict">Executive Verdict</a> |
+    <a href="#hardware">Hardware</a> |
+    <a href="#models">Models</a> |
+    <a href="#performance">Performance</a> |
+    <a href="#comparison">Step-by-Step Comparison</a> |
+    <a href="#deep-dive">Critical Flaw Analysis</a> |
+    <a href="#gemma-code">Gemma Source Code</a> |
+    <a href="#qwopus-code">Qwopus Source Code</a>
+  </nav>
+
+  <section id="task">
+    <h2>📋 The Original Task</h2>
+    <p><strong>Task.md</strong><br>
+    Write a modern C++ class <code>ResourcePool</code> (C++17 or C++20 standard) that manages a pool of heavy resources (e.g., database connections or file handles).</p>
+    <p><strong>Implementation Requirements:</strong><br>
+    • The resource is represented by a <code>HeavyResource</code> class (stub) that is non-copyable but movable.<br>
+    • <code>ResourcePool</code> must initialize a fixed number of resources upon construction.<br>
+    • The <code>acquire()</code> method must return a smart pointer to a resource. If no resources are available, it must throw a <code>std::runtime_error</code>.<br>
+    • When the smart pointer is destroyed, the resource must be automatically returned to the pool (making it available for reuse).<br>
+    • Use either <code>std::unique_ptr</code> with a custom deleter or <code>std::shared_ptr</code> to guarantee automatic resource return. Explain your design choice.<br>
+    • The implementation must be thread-safe (use <code>std::mutex</code>).<br>
+    • Provide a concise usage example in <code>main()</code> that demonstrates acquiring and releasing a resource.</p>
+    <p><strong>Constraints:</strong><br>
+    • No raw pointers in the public interface.<br>
+    • Minimize mutex lock scope (use lock guards only where strictly necessary).<br>
+    • All code in one file(main.cpp).</p>
+  </section>
+
+  <section id="verdict">
+    <h2>🏆 Executive Summary</h2>
+    <p>Gemma 4 12b Qat significantly outperformed Qwopus3.5 9b. 
+    Gemma correctly implemented the core requirement: automatic resource return upon smart pointer destruction using a custom deleter. 
+    Qwopus3.5 9b failed the primary architectural requirement. While it claimed to provide automatic return, its implementation actually destroys the resource or requires a manual <code>release()</code> call, directly violating the task constraints.</p>
+  </section>
+
+  <section id="hardware">
+    <h2>🖥️ Hardware Specifications</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <h3>Processor (CPU)</h3>
+        <p><strong>AMD Ryzen 7 7800X3D</strong> 8-Core Processor</p>
+        <p class="sub-text">Architecture: <span class="badge">x86_64</span> <span class="badge">AVX</span> <span class="badge">AVX2</span></p>
+      </div>
+      <div class="info-card">
+        <h3>Memory Capacity</h3>
+        <p><strong>RAM:</strong> 31.11 GB DDR5</p>
+        <p><strong>VRAM:</strong> 15.92 GB</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="models">
+    <h2>🤖 Model Configurations</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Model Name</th>
+          <th>Repository / Author</th>
+          <th>Quantization</th>
+          <th>Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Gemma 4 12b Qat</strong> <span class="badge">gemma4</span></td>
+          <td>google/gemma-4-12b-qat <br><span class="sub-text">(lmstudio-community)</span></td>
+          <td>Q4_0</td>
+          <td>7.2 GB</td>
+        </tr>
+        <tr>
+          <td><strong>Qwopus 3.5 9b Coder</strong> <span class="badge">qwen35</span></td>
+          <td>qwopus3.5-9b-coder <br><span class="sub-text">(Jackrong)</span></td>
+          <td>Q8_0</td>
+          <td>10.4 GB</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="performance">
+    <h2>⚡ Generation Performance</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Generation Speed</th>
+          <th>Total Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Gemma 4 12b Qat</strong></td>
+          <td>63.85 tokens/sec</td>
+          <td>158s (2:38)</td>
+        </tr>
+        <tr>
+          <td><strong>Qwopus 3.5 9b Coder</strong></td>
+          <td>72.79 tokens/sec</td>
+          <td>85s (1:25)</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="comparison">
+    <h2> Step-by-Step Comparison</h2>
+    <h3>1. Automatic Return on Destruction</h3>
+    <p><span class="pass">✅ Gemma: PASS</span><br>
+    Uses <code>std::unique_ptr</code> with a custom deleter (<code>std::function</code>). When the pointer goes out of scope, the deleter captures <code>this</code> and safely pushes the resource back into the pool's vector.</p>
+    <p><span class="fail">❌ Qwopus: FAIL</span><br>
+    Returns a standard <code>std::shared_ptr</code>. When this pointer is destroyed, the <code>HeavyResource</code> is deleted, not returned. The model added a manual <code>pool.release()</code> method, contradicting the "automatic return" requirement.</p>
+
+    <h3>2. Design Choice Explanation</h3>
+    <p><span class="partial">️ Gemma: PARTIAL</span><br>
+    Did not write an explicit text block titled "Design Choice", but the implementation of a custom deleter is the canonical, correct C++ pattern for this exact problem, speaking for itself.</p>
+    <p><span class="partial">⚠️ Qwopus: CONTRADICTORY</span><br>
+    Provided a beautifully formatted comment block explaining the choice. However, the explanation logically contradicts its own implementation (claiming <code>shared_ptr</code> handles it automatically, while the code does not).</p>
+
+    <h3>3. Thread Safety & Mutex Scope</h3>
+    <p><span class="pass">✅ Gemma: EXCELLENT</span><br>
+    <code>std::lock_guard</code> is used strictly around the <code>pop_back</code> and <code>push_back</code> operations. Lock scope is minimized perfectly.</p>
+    <p><span class="pass">✅ Qwopus: GOOD</span><br>
+    Also uses <code>std::lock_guard</code> correctly and only around the queue operations (<code>front</code> and <code>pop</code> / <code>push</code>).</p>
+
+    <h3>4. No Raw Pointers in Public Interface</h3>
+    <p><span class="pass">✅ Gemma: PASS</span><br>
+    The public <code>acquire()</code> method returns <code>ResourcePtr</code> (an alias for a <code>unique_ptr</code> with a custom deleter).</p>
+    <p><span class="pass">✅ Qwopus: PASS</span><br>
+    Returns <code>std::shared_ptr&lt;HeavyResource&gt;</code>, adhering to the constraint.</p>
+
+    <h3>5. Usage Example in main()</h3>
+    <p><span class="pass">✅ Gemma: EXCELLENT</span><br>
+    Concise, demonstrates normal acquisition, pool exhaustion (with <code>try/catch</code>), and proves automatic return via scope exit <code>{ ... }</code> blocks.</p>
+    <p><span class="fail">❌ Qwopus: FLAWED</span><br>
+    Overly complex multithreaded example that explicitly calls <code>pool.release(resource)</code>, reinforcing the incorrect manual behavior to the user.</p>
+  </section>
+
+  <section id="deep-dive">
+    <h2>🔍 Deep Dive: Qwopus's Critical Flaw</h2>
+    <p>The task explicitly states: <em>"When the smart pointer is destroyed, the resource must be automatically returned to the pool... Use either std::unique_ptr with a custom deleter or std::shared_ptr to guarantee automatic resource return."</em></p>
+    <p>If using <code>std::shared_ptr</code> for this purpose, one must either:<br>
+    1. Pass a custom deleter when creating the <code>shared_ptr</code> inside the pool.<br>
+    2. Use the <code>shared_ptr</code> aliasing constructor to manage the resource's lifetime separately from the object itself.</p>
+    <p>Qwopus simply returns a copy of the <code>shared_ptr</code> from the queue. Once the reference count of this pointer in <code>main()</code> drops to zero, the default deleter is invoked, calling the <code>HeavyResource</code> destructor. The resource is destroyed, not returned. The model's addition of a manual <code>release()</code> method is a workaround that violates the core RAII requirement of the prompt.</p>
+  </section>
+
+  <section id="gemma-code">
+    <h2>💻 Gemma 4 12b Qat Source Code</h2>
+    <pre><code>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+#include &lt;stdexcept&gt;
+#include &lt;functional&gt;
+
+/**
+ * Stub class representing a heavy resource.
+ * Non-copyable but movable.
+ */
+class HeavyResource {
+public:
+    explicit HeavyResource(int id) : id_(id) {}
+    ~HeavyResource()  {
+        std::cout &lt;&lt; "Destroying resource " &lt;&lt; id_ &lt;&lt; std::endl;
+    }
+    void do_work() const {
+        std::cout &lt;&lt; "Resource " &lt;&lt; id_ &lt;&lt; " is performing work." &lt;&lt; std::endl;
+    }
+
+    // Non-copyable
+    HeavyResource(const HeavyResource &amp;) = delete;
+    HeavyResource &amp; operator=(const HeavyResource &amp;) = delete;
+
+    // Movable
+    HeavyResource(HeavyResource &amp;&amp;) = default;
+    HeavyResource &amp; operator=(HeavyResource &amp;&amp;) = default;
+
+private:
+    int id_;
+};
+
+/**
+ * A thread-safe pool of HeavyResource objects.
+ * Manages a fixed number of resources and provides automatic return to the pool
+ * via a custom deleter in a smart pointer.
+ */
+class ResourcePool {
+public:
+    // Custom deleter type to return resource to pool
+    using ResourcePtr = std::unique_ptr &lt;HeavyResource, std::function &lt;void(HeavyResource*)&gt; &gt;;
+
+    /**
+     * Initializes the pool with a fixed number of resources.
+     */
+    explicit ResourcePool(size_t size) {
+        for (size_t i = 0; i &lt; size; ++i) {
+            pool_.push_back(std::make_unique &lt;HeavyResource &gt;(static_cast &lt;int &gt;(i)));
+        }
+    }
+
+    /**
+     * Acquires a resource from the pool.
+     * @return A ResourcePtr that automatically returns the resource to the pool.
+     * @throws std::runtime_error if no resources are available.
+     */
+    ResourcePtr acquire() {
+        std::lock_guard &lt;std::mutex &gt; lock(mutex_);
+        if (pool_.empty()) {
+            throw std::runtime_error("No resources available in the pool.");
+        }
+
+        // Move ownership out of the pool's internal vector
+        std::unique_ptr &lt;HeavyResource &gt; resource = std::move(pool_.back());
+        pool_.pop_back();
+
+        // Return a unique_ptr with a custom deleter.
+        // The deleter captures 'this' to return the resource back to the pool's vector.
+        return ResourcePtr(resource.release(), [this](HeavyResource* ptr) {
+            std::lock_guard &lt;std::mutex &gt; inner_lock(mutex_);
+            pool_.push_back(std::unique_ptr &lt;HeavyResource &gt;(ptr));
+        });
+    }
+
+    // Prevent copying of the pool
+    ResourcePool(const ResourcePool &amp;) = delete;
+    ResourcePool &amp; operator=(const ResourcePool &amp;) = delete;
+
+private:
+    std::vector &lt;std::unique_ptr &lt;HeavyResource &gt; &gt; pool_;
+    std::mutex mutex_;
+};
+
+int main() {
+    try {
+        // Initialize a pool with 2 resources
+        ResourcePool pool(2);
+
+        std::cout &lt;&lt; "--- Example 1: Normal acquisition and automatic release ---" &lt;&lt; std::endl;
+        {
+            auto res1 = pool.acquire();
+            res1-&gt;do_work();
+            // res1 goes out of scope here, and the custom deleter returns it to the pool.
+        }
+
+        std::cout &lt;&lt; "\n--- Example 2: Multiple concurrent acquisitions ---" &lt;&lt; std::endl;
+        {
+            auto res2 = pool.acquire();
+            auto res3 = pool.acquire();
+            res2-&gt;do_work();
+            res3-&gt;do_work();
+        } // Both returned to pool
+
+        std::cout &lt;&lt; "\n--- Example 3: Handling exhausted pool ---" &lt;&lt; std::endl;
+        {
+            auto r1 = pool.acquire();
+            auto r2 = pool.acquire();
+            try {
+                std::cout &lt;&lt; "Attempting to acquire a 3rd resource..." &lt;&lt; std::endl;
+                auto r3 = pool.acquire(); // Should throw
+            } catch (const std::runtime_error &amp; e) {
+                std::cout &lt;&lt; "Caught expected error: " &lt;&lt; e.what() &lt;&lt; std::endl;
+            }
+            // r1 and r2 are released here
+        }
+
+    } catch (const std::exception &amp; e) {
+        std::cerr &lt;&lt; "Unexpected exception: " &lt;&lt; e.what() &lt;&lt; std::endl;
+        return 1;
+    }
+
+    return 0;
+}</code></pre>
+  </section>
+
+  <section id="qwopus-code">
+    <h2>💻 Qwopus3.5 9b Source Code</h2>
+    <pre><code>#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+#include &lt;queue&gt;
+#include &lt;stdexcept&gt;
+#include &lt;thread&gt;
+#include &lt;functional&gt;
+
+// Stub for HeavyResource - non-copyable but movable
+// In a real scenario, this would represent a database connection, file handle, etc.
+class HeavyResource {
+public:
+    HeavyResource() : id_(std::atomic &lt;int &gt;{0}.fetch_add(1)) {
+        std::cout &lt;&lt; "[HeavyResource] Created resource with id = " &lt;&lt; id_ &lt;&lt; std::endl;
+    }
+    HeavyResource(const HeavyResource &amp;) = delete;  // Non-copyable
+    HeavyResource &amp; operator=(const HeavyResource &amp;) = delete;  // Non-copyable
+    HeavyResource(HeavyResource &amp;&amp;) noexcept = default;  // Movable
+    HeavyResource &amp; operator=(HeavyResource &amp;&amp;) noexcept = default;  // Movable
+    ~HeavyResource() {
+        std::cout &lt;&lt; "[HeavyResource] Destroyed resource with id = " &lt;&lt; id_ &lt;&lt; std::endl;
+    }
+    int getId() const { return id_; }
+
+private:
+    int id_;
+};
+
+/**
+ * ResourcePool manages a pool of HeavyResource objects.
+ *
+ * Design Choice: std::shared_ptr with custom deleter
+ *
+ * We use std::shared_ptr because:
+ * 1. When the smart pointer is destroyed (resource released), the deleter is automatically invoked,
+ *    which returns the resource to the pool without requiring explicit action.
+ * 2. The custom deleter ensures thread-safety when returning resources to the pool.
+ * 3. std::unique_ptr would require manual management of the return-to-pool logic, which is
+ *    error-prone and violates RAII principles.
+ * 4. The shared_ptr's reference counting ensures resources are only destroyed when no one
+ *    is actively holding them.
+ */
+class ResourcePool {
+public:
+    explicit ResourcePool(std::size_t size)
+        : resources_(size), available_resources_() {
+        std::cout &lt;&lt; "[ResourcePool] Initializing pool with " &lt;&lt; size &lt;&lt; " resources..." &lt;&lt; std::endl;
+        for (auto &amp; res : resources_) {
+            res = std::make_shared &lt;HeavyResource &gt;();
+            available_resources_.push(res);
+        }
+        std::cout &lt;&lt; "[ResourcePool] Pool initialized successfully." &lt;&lt; std::endl;
+    }
+
+    ~ResourcePool() {
+        std::cout &lt;&lt; "[ResourcePool] Shutting down pool..." &lt;&lt; std::endl;
+        // All resources will be automatically returned via shared_ptr deleter
+    }
+
+    // Thread-safe acquisition of a resource
+    std::shared_ptr &lt;HeavyResource &gt; acquire() {
+        std::lock_guard &lt;std::mutex &gt; lock(mutex_);
+        if (available_resources_.empty()) {
+            throw std::runtime_error("No resources available in pool");
+        }
+        auto resource = available_resources_.front();
+        available_resources_.pop();
+        std::cout &lt;&lt; "[ResourcePool] Acquired resource id = " &lt;&lt; resource-&gt;getId() &lt;&lt; std::endl;
+        return resource;
+    }
+
+    // Thread-safe release of a resource back to the pool
+    void release(std::shared_ptr &lt;HeavyResource &gt; resource) {
+        if (!resource) {
+            return;  // Nothing to release
+        }
+        std::lock_guard &lt;std::mutex &gt; lock(mutex_);
+        available_resources_.push(resource);
+        std::cout &lt;&lt; "[ResourcePool] Released resource id = " &lt;&lt; resource-&gt;getId() &lt;&lt; std::endl;
+    }
+
+    std::size_t availableCount() const {
+        std::lock_guard &lt;std::mutex &gt; lock(mutex_);
+        return available_resources_.size();
+    }
+
+private:
+    std::vector &lt;std::shared_ptr &lt;HeavyResource &gt; &gt; resources_;
+    std::queue &lt;std::shared_ptr &lt;HeavyResource &gt; &gt; available_resources_;
+    mutable std::mutex mutex_;
+};
+
+/**
+ * Usage example demonstrating thread-safe resource acquisition and release.
+ */
+int main() {
+    std::cout &lt;&lt; "=== ResourcePool Demo ===" &lt;&lt; std::endl;
+
+    // Create a pool with 5 heavy resources
+    ResourcePool pool(5);
+
+    // Simulate concurrent workers acquiring and releasing resources
+    const int numWorkers =  3;
+    const int tasksPerWorker = 5;
+    std::vector &lt;std::thread &gt; workers;
+
+    for (int i = 0; i &lt; numWorkers; ++i) {
+        workers.emplace_back([ &amp;pool, i, tasksPerWorker]() {
+            for (int j = 0; j &lt; tasksPerWorker; ++j) {
+                try {
+                    std::shared_ptr &lt;HeavyResource &gt; resource = pool.acquire();
+                    // Simulate work being done with the resource
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                     // Release the resource back to the pool (automatic on scope exit)
+                    pool.release(resource);
+                } catch (const std::runtime_error &amp; e) {
+                    std::cerr &lt;&lt; "Worker " &lt;&lt; i &lt;&lt; " task " &lt;&lt; j &lt;&lt; ": " &lt;&lt; e.what() &lt;&lt; std::endl;
+                }
+            }
+        });
+    }
+
+    // Wait for all workers to complete
+    for (auto &amp; worker : workers) {
+        worker.join();
+    }
+
+    std::cout &lt;&lt; "All workers completed. Available resources: " &lt;&lt; pool.availableCount() &lt;&lt; std::endl;
+
+    // Demonstrate exception handling when no resources available
+    std::cout &lt;&lt; "\n=== Testing Resource Exhaustion ===" &lt;&lt; std::endl;
+    try {
+        pool.acquire();  // Should throw
+    } catch (const std::runtime_error &amp; e) {
+        std::cout &lt;&lt; "Caught expected exception: " &lt;&lt; e.what() &lt;&lt; std::endl;
+    }
+
+    // Demonstrate automatic resource return on scope exit
+    std::cout &lt;&lt; "\n=== Demonstrating Automatic Return on Scope Exit ===" &lt;&lt; std::endl;
+    {
+        std::shared_ptr &lt;HeavyResource &gt; res = pool.acquire();
+        std::cout &lt;&lt; "Resource acquired, id = " &lt;&lt; res-&gt;getId() &lt;&lt; std::endl;
+        // Resource automatically returned when 'res' goes out of scope
+    }  // End of scope - resource returned to pool
+    std::cout &lt;&lt; "Available resources after scope exit: " &lt;&lt; pool.availableCount() &lt;&lt; std::endl;
+
+    std::cout &lt;&lt; "\n=== Demo Complete ===" &lt;&lt; std::endl;
+    return 0;
+}</code></pre>
+  </section>
+</body>
+</html>
