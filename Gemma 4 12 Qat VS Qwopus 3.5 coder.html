@@ -130,14 +130,7 @@
     • All code in one file(main.cpp).</p>
   </section>
 
-  <section id="verdict">
-    <h2>🏆 Executive Summary</h2>
-    <p>Gemma 4 12b Qat significantly outperformed Qwopus3.5 9b. 
-    Gemma correctly implemented the core requirement: automatic resource return upon smart pointer destruction using a custom deleter. 
-    Qwopus3.5 9b failed the primary architectural requirement. While it claimed to provide automatic return, its implementation actually leaks it permanently from the available queue or requires a manual <code>release()</code> call, directly violating the task constraints.</p>
-  </section>
-
-  <section id="hardware">
+<section id="hardware">
     <h2>🖥️ Hardware Specifications</h2>
     <div class="info-grid">
       <div class="info-card">
@@ -151,6 +144,13 @@
         <p><strong>VRAM:</strong> 15.92 GB</p>
       </div>
     </div>
+  </section>
+
+  <section id="verdict">
+    <h2>🏆 Executive Summary</h2>
+    <p>Gemma 4 12b Qat significantly outperformed Qwopus3.5 9b. 
+    Gemma correctly implemented the core requirement: automatic resource return upon smart pointer destruction using a custom deleter. 
+    Qwopus3.5 9b failed the primary architectural requirement. While it claimed to provide automatic return, its implementation actually leaks it permanently from the available queue or requires a manual <code>release()</code> call, directly violating the task constraints.</p>
   </section>
 
   <section id="models">
